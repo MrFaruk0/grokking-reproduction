@@ -1,0 +1,24 @@
+# Core deep learning (paper uses PyTorch)
+torch==2.2.0
+torchvision==0.17.0
+
+# Numerical computing
+numpy==1.26.4
+scipy==1.12.0
+
+# Visualization
+matplotlib==3.8.3
+seaborn==0.13.2
+
+# Data handling
+pandas==2.2.1
+
+# Notebook support
+jupyter==1.0.0
+ipykernel==6.29.3
+
+# Progress bars (used in training loop)
+tqdm==4.66.2
+
+# Utilities
+einops==0.7.0
