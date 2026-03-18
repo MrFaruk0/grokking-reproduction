@@ -104,8 +104,8 @@ def update_memory(
         for wd, h in sorted(wd_results.items()):
             ge = find_grokking_epoch(h, threshold)
             fa = h["test_acc"][-1] if h["test_acc"] else "—"
-            lines.append(f"| {wd} | {ge if ge else 'Not reached'} | "
-                        f"{fa:.4f if isinstance(fa, float) else fa} |\n")
+            fa_str = f"{fa:.4f}" if isinstance(fa, float) else str(fa)
+            lines.append(f"| {wd} | {ge if ge else 'Not reached'} | {fa_str} |\n")
 
     # Prime p sweep
     if p_results is not None:
@@ -115,8 +115,8 @@ def update_memory(
         for p_val, h in sorted(p_results.items()):
             ge = find_grokking_epoch(h, threshold)
             fa = h["test_acc"][-1] if h["test_acc"] else "—"
-            lines.append(f"| {p_val} | {ge if ge else 'Not reached'} | "
-                        f"{fa:.4f if isinstance(fa, float) else fa} |\n")
+            fa_str = f"{fa:.4f}" if isinstance(fa, float) else str(fa)
+            lines.append(f"| {p_val} | {ge if ge else 'Not reached'} | {fa_str} |\n")
 
     # Operations sweep
     if op_results is not None:
@@ -126,8 +126,8 @@ def update_memory(
         for op, h in op_results.items():
             ge = find_grokking_epoch(h, threshold)
             fa = h["test_acc"][-1] if h["test_acc"] else "—"
-            lines.append(f"| {op} | {ge if ge else 'Not reached'} | "
-                        f"{fa:.4f if isinstance(fa, float) else fa} |\n")
+            fa_str = f"{fa:.4f}" if isinstance(fa, float) else str(fa)
+            lines.append(f"| {op} | {ge if ge else 'Not reached'} | {fa_str} |\n")
 
     # Depth sweep
     if depth_results is not None:
@@ -137,8 +137,8 @@ def update_memory(
         for depth, h in sorted(depth_results.items()):
             ge = find_grokking_epoch(h, threshold)
             fa = h["test_acc"][-1] if h["test_acc"] else "—"
-            lines.append(f"| {depth} | {ge if ge else 'Not reached'} | "
-                        f"{fa:.4f if isinstance(fa, float) else fa} |\n")
+            fa_str = f"{fa:.4f}" if isinstance(fa, float) else str(fa)
+            lines.append(f"| {depth} | {ge if ge else 'Not reached'} | {fa_str} |\n")
 
     # Append to file
     with open(memory_path, "a", encoding="utf-8") as f:
