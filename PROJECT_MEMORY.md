@@ -23,7 +23,9 @@ Next step: src/data.py
 - [2026-03-18] Scaffolded project: .gitignore, requirements.txt, PROJECT_EXPLAIN.md, PROJECT_MEMORY.md, src/data.py, src/model.py, src/train.py, src/analysis.py, src/figures.py, src/utils.py, notebooks/run_all.ipynb
 
 ## Failed attempts
-— none yet
+- [2026-03-18] Training cell failed with `ValueError: numpy.dtype size changed, may indicate binary incompatibility`.
+  - **Root Cause:** Downgrading `numpy` to `1.26.4` in Colab's Python 3.12 environment caused binary incompatibility with pre-installed extensions compiled for Numpy 2.x.
+  - **Fix:** Updated `requirements.txt` to pin newer versions (Numpy 2.1.1, PyTorch 2.4.0, SciPy 1.14.0, etc.) that match Colab's modern runtime.
 
 ## Hyperparameters
 - p: 113
