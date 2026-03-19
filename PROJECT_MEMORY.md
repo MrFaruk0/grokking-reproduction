@@ -16,11 +16,11 @@ Next step: Project complete (abstract drafted)
 - GitHub repo: [URL — fill in before first Colab session]
 - Last commit: —
 
-## Deviations from paper
-- LayerNorm: DÜZELTILDI. İlk implementasyonda pre-LN kullanılmıştı (3 adet: ln1, ln2, ln_final).
+- LayerNorm: DÜZELTİLDİ. İlk implementasyonda pre-LN kullanılmıştı (3 adet: ln1, ln2, ln_final).
   Makale açıkça "We did not use LayerNorm" diyor (Bölüm 3, sayfa 3).
   src/model.py güncellenerek tüm LayerNorm katmanları kaldırıldı.
   Diğer tüm hyperparametreler makalenin Bölüm 3 ve Appendix A spesifikasyonuyla birebir eşleşiyor.
+- Epoch sayısı: 20000'den 40000'e çıkarıldı. Gerekçe: LayerNorm kaldırıldığı için modelin grokking yapabilmesi veya converge olabilmesi adına daha uzun eğitim süresine ihtiyaç duyulabilir.
 
 
 ## Completed steps
@@ -42,7 +42,7 @@ Next step: Project complete (abstract drafted)
 - optimizer: AdamW (β1=0.9, β2=0.98)
 - batch_size: full dataset (p²=12769 pairs)
 - train_fraction: 0.3
-- total_epochs: 20000
+- total_epochs: 40000
 - seed: 42
 
 ## Results log
