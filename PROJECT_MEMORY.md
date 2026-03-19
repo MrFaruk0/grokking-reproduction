@@ -2,9 +2,9 @@
 Last updated: 2026-03-18T17:22:37+03:00
 
 ## Status
-Current phase: Results Analysis
-Last completed step: Full Colab notebook execution and memory update
-Next step: Project complete (abstract drafted)
+Current phase: Training
+Last completed step: Repo tamamen yeniden yapılandırıldı — orijinal transformers.py + helpers.py
+Next step: Colab'da Cell 2 çalıştır (baseline training)
 
 ## Environment
 - GPU: Tesla T4
@@ -15,9 +15,8 @@ Next step: Project complete (abstract drafted)
 ## Repository
 - GitHub repo: [URL — fill in before first Colab session]
 ## Deviations from paper
-- model.py: TAMAMEN YENİDEN YAZILDI. Orijinal transformers.py ile birebir eşleşti.
-  Çıkarılanlar: HookPoint, wandb (logging bağımlılıkları, model matematiğini etkilemiyor)
-  Korunanlar: W init (1/sqrt(fan_in)), causal mask, einsum notasyonu, tüm matris boyutları
+- wandb: ÇIKARILDI (cloud logging, model matematiğini etkilemiyor)
+- Diğer her şey orijinal transformers.py ile birebir
 
 
 ## Completed steps
@@ -31,12 +30,9 @@ Next step: Project complete (abstract drafted)
 - [2026-03-20] train.py: betas=(0.9,0.98), lr warmup scheduler, epochs=50000
 
 ## Failed attempts
-- [2026-03-18] Training cell failed with `ValueError: numpy.dtype size changed, may indicate binary incompatibility`.
-  - **Root Cause:** Downgrading `numpy` to `1.26.4` in Colab's Python 3.12 environment caused binary incompatibility with pre-installed extensions compiled for Numpy 2.x.
-  - **Fix:** Updated `requirements.txt` to pin newer versions (Numpy 2.1.1, PyTorch 2.4.0, SciPy 1.14.0, etc.) that match Colab's modern runtime.
-- std=0.02 init | 20k epoch | grokking yok
-- std=0.02 init | 40k epoch | grokking yok (train ~0.69, test ~0.50)
-- 1/sqrt(fan_in) init, beta2=0.999, no scheduler | 40k epoch | grokking yok
+- Modüler src/ yapısı: weight init (std=0.02), einsum çakışması,
+  causal mask eksikliği nedeniyle 50k epochta grokking üretmedi
+- Karar: orijinal transformers.py birebir kullanılacak
 
 ## Hyperparameters
 - p: 113
