@@ -14,13 +14,10 @@ Next step: Project complete (abstract drafted)
 
 ## Repository
 - GitHub repo: [URL — fill in before first Colab session]
-- Last commit: —
-
-- LayerNorm: DÜZELTİLDİ. İlk implementasyonda pre-LN kullanılmıştı (3 adet: ln1, ln2, ln_final).
-  Makale açıkça "We did not use LayerNorm" diyor (Bölüm 3, sayfa 3).
-  src/model.py güncellenerek tüm LayerNorm katmanları kaldırıldı.
-  Diğer tüm hyperparametreler makalenin Bölüm 3 ve Appendix A spesifikasyonuyla birebir eşleşiyor.
-- Epoch sayısı: 20000'den 40000'e çıkarıldı. Gerekçe: LayerNorm kaldırıldığı için modelin grokking yapabilmesi veya converge olabilmesi adına daha uzun eğitim süresine ihtiyaç duyulabilir.
+## Deviations from paper
+- model.py: TAMAMEN YENİDEN YAZILDI. Orijinal transformers.py ile birebir eşleşti.
+  Çıkarılanlar: HookPoint, wandb (logging bağımlılıkları, model matematiğini etkilemiyor)
+  Korunanlar: W init (1/sqrt(fan_in)), causal mask, einsum notasyonu, tüm matris boyutları
 
 
 ## Completed steps
@@ -30,6 +27,16 @@ Next step: Project complete (abstract drafted)
   - **Fix:** Updated `requirements.txt` to pin newer versions (Numpy 2.1.1, PyTorch 2.4.0, SciPy 1.14.0, etc.) that match Colab's modern runtime.
 - [2026-03-18] Successfully ran all training sweeps and generated figures.
 - [2026-03-20] src/model.py LayerNorm kaldırma güncellemesi | outcome: ln_count=0, forward pass shape (B,113) doğrulandı
+- [2026-03-20] model.py orijinal transformers.py ile birebir eşleştirildi
+- [2026-03-20] train.py: betas=(0.9,0.98), lr warmup scheduler, epochs=50000
+
+## Failed attempts
+- [2026-03-18] Training cell failed with `ValueError: numpy.dtype size changed, may indicate binary incompatibility`.
+  - **Root Cause:** Downgrading `numpy` to `1.26.4` in Colab's Python 3.12 environment caused binary incompatibility with pre-installed extensions compiled for Numpy 2.x.
+  - **Fix:** Updated `requirements.txt` to pin newer versions (Numpy 2.1.1, PyTorch 2.4.0, SciPy 1.14.0, etc.) that match Colab's modern runtime.
+- std=0.02 init | 20k epoch | grokking yok
+- std=0.02 init | 40k epoch | grokking yok (train ~0.69, test ~0.50)
+- 1/sqrt(fan_in) init, beta2=0.999, no scheduler | 40k epoch | grokking yok
 
 ## Hyperparameters
 - p: 113
@@ -39,10 +46,10 @@ Next step: Project complete (abstract drafted)
 - num_layers: 1
 - lr: 1e-3
 - weight_decay: 1.0
-- optimizer: AdamW (β1=0.9, β2=0.98)
+- optimizer: AdamW (β1=0.9, β2=0.98, lr_warmup)
 - batch_size: full dataset (p²=12769 pairs)
 - train_fraction: 0.3
-- total_epochs: 40000
+- total_epochs: 50000
 - seed: 42
 
 ## Results log

@@ -1,112 +1,114 @@
-import math
+"""
+src/model.py
+Orijinal Nanda et al. (2023) transformer implementasyonu.
+Kaynak: https://github.com/mechanistic-interpretability-grokking/progress-measures-paper/blob/main/transformers.py
+HookPoint ve wandb bağımlılıkları çıkarıldı, geri kalan her şey birebir aynı.
+"""
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional
+import einops
+from dataclasses import dataclass
 
 
-# ---------------------------------------------------------------------------
-# Attention
-# ---------------------------------------------------------------------------
+@dataclass(frozen=True)
+class Config:
+    lr: float = 1e-3
+    weight_decay: float = 1.0
+    p: int = 113
+    d_model: int = 128
+    fn_name: str = 'add'
+    frac_train: float = 0.3
+    num_epochs: int = 50000
+    seed: int = 0
+    num_layers: int = 1
+    batch_style: str = 'full'
+    d_vocab: int = 114        # p + 1
+    n_ctx: int = 3
+    d_mlp: int = 512          # 4 * d_model
+    num_heads: int = 4
+    act_type: str = 'ReLU'
+    use_ln: bool = False
 
-class MultiHeadAttention(nn.Module):
-    """
-    Multi-head self-attention with pre-LayerNorm applied outside this module.
+    @property
+    def d_head(self):
+        return self.d_model // self.num_heads
 
-    Args:
-        d_model:    Model embedding dimension.
-        num_heads:  Number of attention heads. d_model must be divisible by num_heads.
-    """
 
-    def __init__(self, d_model: int, num_heads: int) -> None:
+class Embed(nn.Module):
+    def __init__(self, d_vocab, d_model):
         super().__init__()
-        assert d_model % num_heads == 0, \
-            f"d_model ({d_model}) must be divisible by num_heads ({num_heads})"
-        self.d_model = d_model
-        self.num_heads = num_heads
-        self.head_dim = d_model // num_heads
+        self.W_E = nn.Parameter(torch.randn(d_model, d_vocab) / np.sqrt(d_model))
 
-        # Projection matrices (no bias, following Nanda et al.)
-        self.W_Q = nn.Linear(d_model, d_model, bias=False)
-        self.W_K = nn.Linear(d_model, d_model, bias=False)
-        self.W_V = nn.Linear(d_model, d_model, bias=False)
-        self.W_O = nn.Linear(d_model, d_model, bias=False)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Args:
-            x: (batch, seq_len, d_model)
-        Returns:
-            (batch, seq_len, d_model)
-        """
-        B, T, _ = x.shape
-        H, D = self.num_heads, self.head_dim
-
-        Q = self.W_Q(x).view(B, T, H, D).transpose(1, 2)  # (B, H, T, D)
-        K = self.W_K(x).view(B, T, H, D).transpose(1, 2)
-        V = self.W_V(x).view(B, T, H, D).transpose(1, 2)
-
-        scale = math.sqrt(D)
-        attn_scores = torch.matmul(Q, K.transpose(-2, -1)) / scale  # (B, H, T, T)
-        attn_weights = F.softmax(attn_scores, dim=-1)
-
-        out = torch.matmul(attn_weights, V)             # (B, H, T, D)
-        out = out.transpose(1, 2).contiguous().view(B, T, self.d_model)  # (B, T, d_model)
-        return self.W_O(out)
+    def forward(self, x):
+        return torch.einsum('dbp -> bpd', self.W_E[:, x])
 
 
-# ---------------------------------------------------------------------------
-# MLP sublayer
-# ---------------------------------------------------------------------------
+class Unembed(nn.Module):
+    def __init__(self, d_vocab, d_model):
+        super().__init__()
+        self.W_U = nn.Parameter(torch.randn(d_model, d_vocab) / np.sqrt(d_vocab))
+
+    def forward(self, x):
+        return x @ self.W_U
+
+
+class PosEmbed(nn.Module):
+    def __init__(self, max_ctx, d_model):
+        super().__init__()
+        self.W_pos = nn.Parameter(torch.randn(max_ctx, d_model) / np.sqrt(d_model))
+
+    def forward(self, x):
+        return x + self.W_pos[:x.shape[-2]]
+
+
+class Attention(nn.Module):
+    def __init__(self, d_model, num_heads, d_head, n_ctx):
+        super().__init__()
+        self.W_K = nn.Parameter(torch.randn(num_heads, d_head, d_model) / np.sqrt(d_model))
+        self.W_Q = nn.Parameter(torch.randn(num_heads, d_head, d_model) / np.sqrt(d_model))
+        self.W_V = nn.Parameter(torch.randn(num_heads, d_head, d_model) / np.sqrt(d_model))
+        self.W_O = nn.Parameter(torch.randn(d_model, d_head * num_heads) / np.sqrt(d_model))
+        self.register_buffer('mask', torch.tril(torch.ones((n_ctx, n_ctx))))
+        self.d_head = d_head
+
+    def forward(self, x):
+        k = torch.einsum('ihd,bpd->biph', self.W_K, x)
+        q = torch.einsum('ihd,bpd->biph', self.W_Q, x)
+        v = torch.einsum('ihd,bpd->biph', self.W_V, x)
+        attn_scores_pre = torch.einsum('biph,biqp->biqp', k, q)
+        attn_scores_masked = torch.tril(attn_scores_pre) - 1e10 * (1 - self.mask[:x.shape[-2], :x.shape[-2]])
+        attn_matrix = F.softmax(attn_scores_masked / np.sqrt(self.d_head), dim=-1)
+        z = torch.einsum('biph,biqp->biqh', v, attn_matrix)
+        z_flat = einops.rearrange(z, 'b i q h -> b q (i h)')
+        out = torch.einsum('df,bqf->bqd', self.W_O, z_flat)
+        return out
+
 
 class MLP(nn.Module):
-    """
-    Two-layer MLP with ReLU activation (exact paper spec).
-
-    Pre-LayerNorm is applied outside this module.
-
-    Args:
-        d_model: Input/output dimension.
-        d_mlp:   Hidden dimension (paper: 512 = 4 × 128).
-    """
-
-    def __init__(self, d_model: int, d_mlp: int) -> None:
+    def __init__(self, d_model, d_mlp, act_type):
         super().__init__()
-        self.W_in  = nn.Linear(d_model, d_mlp, bias=True)
-        self.W_out = nn.Linear(d_mlp, d_model, bias=True)
+        self.W_in  = nn.Parameter(torch.randn(d_mlp, d_model) / np.sqrt(d_model))
+        self.b_in  = nn.Parameter(torch.zeros(d_mlp))
+        self.W_out = nn.Parameter(torch.randn(d_model, d_mlp) / np.sqrt(d_model))
+        self.b_out = nn.Parameter(torch.zeros(d_model))
+        self.act_type = act_type
+        assert act_type in ['ReLU', 'GeLU']
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Args:
-            x: (batch, seq_len, d_model)
-        Returns:
-            (batch, seq_len, d_model)
-        """
-        return self.W_out(F.relu(self.W_in(x)))
+    def forward(self, x):
+        x = torch.einsum('md,bpd->bpm', self.W_in, x) + self.b_in
+        x = F.relu(x) if self.act_type == 'ReLU' else F.gelu(x)
+        x = torch.einsum('dm,bpm->bpd', self.W_out, x) + self.b_out
+        return x
 
-
-# ---------------------------------------------------------------------------
-# Transformer Block
-# ---------------------------------------------------------------------------
 
 class TransformerBlock(nn.Module):
-    """
-    Single transformer block with pre-LayerNorm.
-
-    Computation (following Nanda et al. §A.1):
-        x = x + Attention(LayerNorm(x))
-        x = x + MLP(LayerNorm(x))
-
-    Args:
-        d_model:   Embedding dimension.
-        num_heads: Number of attention heads.
-        d_mlp:     MLP hidden dimension.
-    """
-
-    def __init__(self, d_model: int, num_heads: int, d_mlp: int) -> None:
+    def __init__(self, d_model, d_mlp, d_head, num_heads, n_ctx, act_type):
         super().__init__()
-        self.attn = MultiHeadAttention(d_model, num_heads)
-        self.mlp  = MLP(d_model, d_mlp)
+        self.attn = Attention(d_model, num_heads, d_head, n_ctx)
+        self.mlp  = MLP(d_model, d_mlp, act_type)
 
     def forward(self, x):
         x = x + self.attn(x)
@@ -114,101 +116,42 @@ class TransformerBlock(nn.Module):
         return x
 
 
-# ---------------------------------------------------------------------------
-# Full model
-# ---------------------------------------------------------------------------
-
-class GrokkingTransformer(nn.Module):
-    """
-    1-layer transformer for modular arithmetic (Nanda et al. 2023).
-
-    Architecture:
-        - Token embedding W_E: (vocab_size, d_model)
-        - Positional embedding W_pos: (seq_len=3, d_model)
-        - TransformerBlock × num_layers
-        - No LayerNorm
-        - Unembedding W_U: (d_model, p) — only p output logits (not vocab_size)
-
-    Prediction:
-        Only the hidden state at position 2 (the "=" token) is unembedded.
-        This follows the paper exactly: the model maps [a, b, =] → logit for (a+b mod p).
-
-    Args:
-        p:          Prime modulus. Operands ∈ {0..p-1}, vocab_size = p+1.
-        d_model:    Embedding dimension (paper: 128).
-        num_heads:  Attention heads (paper: 4).
-        d_mlp:      MLP hidden dim (paper: 512).
-        num_layers: Transformer depth (paper baseline: 1).
-    """
-
-    def __init__(
-        self,
-        p: int = 113,
-        d_model: int = 128,
-        num_heads: int = 4,
-        d_mlp: int = 512,
-        num_layers: int = 1,
-    ) -> None:
+class Transformer(nn.Module):
+    def __init__(self, config: Config):
         super().__init__()
-        self.p = p
-        self.d_model = d_model
-        self.vocab_size = p + 1  # tokens 0..p-1 plus the "=" token at index p
-        self.seq_len = 3         # [a, b, =]
-
-        # Embeddings
-        self.embedding = nn.Embedding(self.vocab_size, d_model)
-        self.pos_embedding = nn.Embedding(self.seq_len, d_model)
-
-        # Transformer layers
-        self.blocks = nn.ModuleList([
-            TransformerBlock(d_model, num_heads, d_mlp)
-            for _ in range(num_layers)
+        self.config = config
+        self.embed     = Embed(d_vocab=config.d_vocab, d_model=config.d_model)
+        self.pos_embed = PosEmbed(max_ctx=config.n_ctx, d_model=config.d_model)
+        self.blocks    = nn.ModuleList([
+            TransformerBlock(
+                d_model=config.d_model,
+                d_mlp=config.d_mlp,
+                d_head=config.d_head,
+                num_heads=config.num_heads,
+                n_ctx=config.n_ctx,
+                act_type=config.act_type,
+            )
+            for _ in range(config.num_layers)
         ])
+        self.unembed = Unembed(d_vocab=config.d_vocab, d_model=config.d_model)
 
-
-        # Unembedding — output logits over p result tokens only (not the "=" token)
-        self.unembed = nn.Linear(d_model, p, bias=False)
-
-        self._init_weights()
-
-    def _init_weights(self) -> None:
-        """Initialize weights with small normal noise (following Nanda et al.)."""
-        for module in self.modules():
-            if isinstance(module, (nn.Linear, nn.Embedding)):
-                nn.init.normal_(module.weight, mean=0.0, std=0.02)
-            if isinstance(module, nn.Linear) and module.bias is not None:
-                nn.init.zeros_(module.bias)
-
-    def forward(self, tokens: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass.
-
-        Args:
-            tokens: (batch, 3) — integer token indices [a, b, eq_token]
-
-        Returns:
-            logits: (batch, p) — un-normalized scores for each result token 0..p-1
-        """
-        B, T = tokens.shape
-        positions = torch.arange(T, device=tokens.device).unsqueeze(0)  # (1, T)
-
-        x = self.embedding(tokens) + self.pos_embedding(positions)  # (B, T, d_model)
-
+    def forward(self, x):
+        x = self.embed(x)
+        x = self.pos_embed(x)
         for block in self.blocks:
-            x = block(x)         # (B, T, d_model)
-        x = x[:, -1, :]               # (B, d_model) — last position ("=" token)
-        logits = self.unembed(x)      # (B, p)
-        return logits
+            x = block(x)
+        x = self.unembed(x)
+        return x
 
-    def get_embedding_matrix(self) -> torch.Tensor:
-        """
-        Return the token embedding matrix for the p operand tokens (not the "=" token).
+    # Aşağıdaki yardımcı metodlar analysis.py ile uyumluluk için:
+    def get_embedding_matrix(self):
+        """W_E'nin ilk p satırını döndür (operand tokenları)."""
+        # W_E shape: (d_model, d_vocab) → transpose → (d_vocab, d_model) → ilk p satır
+        return self.embed.W_E[:, :self.config.p].T.detach().cpu()
 
-        Returns:
-            W_E: (p, d_model) on CPU as a detached tensor.
-        """
-        return self.embedding.weight[:self.p].detach().cpu()
+    def count_parameters(self):
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
-    def count_parameters(self) -> int:
-        """Return total number of trainable parameters."""
-        return sum(param.numel() for param in self.parameters() if param.requires_grad)
+
+# Geriye dönük uyumluluk için alias
+GrokkingTransformer = Transformer

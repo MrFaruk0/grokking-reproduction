@@ -26,7 +26,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from src.data import generate_dataset, get_inputs_and_labels
-from src.model import GrokkingTransformer
+from src.model import Transformer, Config
 from src.analysis import compute_fourier_multiplicity, compute_weight_norm
 
 
@@ -54,10 +54,10 @@ def accuracy(logits: torch.Tensor, labels: torch.Tensor) -> float:
 # ---------------------------------------------------------------------------
 
 def train(
-    model: GrokkingTransformer,
+    model: Transformer,
     train_data: torch.Tensor,
     test_data: torch.Tensor,
-    epochs: int = 40_000,
+    epochs: int = 50_000,
     lr: float = 1e-3,
     weight_decay: float = 1.0,
     beta1: float = 0.9,
@@ -75,7 +75,7 @@ def train(
     This matches the paper exactly (batch_size = full dataset).
 
     Args:
-        model:           GrokkingTransformer instance.
+        model:           Transformer instance.
         train_data:      (N_train, 4) tensor from generate_dataset().
         test_data:       (N_test, 4) tensor from generate_dataset().
         epochs:          Total training steps (paper: 20000).
@@ -104,6 +104,10 @@ def train(
         lr=lr,
         weight_decay=weight_decay,
         betas=(beta1, beta2),
+    )
+
+    scheduler = torch.optim.lr_scheduler.LambdaLR(
+        optimizer, lr_lambda=lambda step: min((step + 1) / 10, 1.0)
     )
 
     # Move data to device
@@ -148,16 +152,19 @@ def train(
             # ---- Train step ----
             model.train()
             optimizer.zero_grad()
-            train_logits = model(train_inputs)               # (N_train, p)
+            train_logits_full = model(train_inputs)
+            train_logits = train_logits_full[:, -1, :-1]
             train_loss   = F.cross_entropy(train_logits, train_labels)
             train_loss.backward()
             optimizer.step()
+            scheduler.step()
 
             # ---- Logging ----
             if epoch % log_every == 0 or epoch == 1:
                 model.eval()
                 with torch.no_grad():
-                    test_logits = model(test_inputs)
+                    test_logits_full = model(test_inputs)
+                    test_logits = test_logits_full[:, -1, :-1]
                     test_loss   = F.cross_entropy(test_logits, test_labels)
                     tr_acc  = accuracy(train_logits, train_labels)
                     te_acc  = accuracy(test_logits,  test_labels)
@@ -251,8 +258,8 @@ def sweep_weight_decay(
         print(f"Weight decay sweep: λ = {wd}")
         print(f"{'='*60}")
         torch.manual_seed(seed)
-        model = GrokkingTransformer(p=p, d_model=d_model,
-                                    num_heads=num_heads, d_mlp=d_mlp)
+        config = Config(p=p, d_model=d_model, num_heads=num_heads, d_mlp=d_mlp, num_epochs=epochs)
+        model = Transformer(config)
         log_path = log_dir / f"wd_{wd:.2f}.csv" if log_dir else None
         history = train(
             model, train_data, test_data,
@@ -302,8 +309,8 @@ def sweep_prime_p(
         print(f"{'='*60}")
         torch.manual_seed(seed)
         train_data, test_data = generate_dataset(p=prime, seed=seed)
-        model = GrokkingTransformer(p=prime, d_model=d_model,
-                                    num_heads=num_heads, d_mlp=d_mlp)
+        config = Config(p=prime, d_model=d_model, num_heads=num_heads, d_mlp=d_mlp, num_epochs=epochs)
+        model = Transformer(config)
         log_path = log_dir / f"p_{prime}.csv" if log_dir else None
         history = train(
             model, train_data, test_data,
@@ -355,8 +362,8 @@ def sweep_operations(
         print(f"{'='*60}")
         torch.manual_seed(seed)
         train_data, test_data = generate_dataset(p=p, seed=seed, operation=op)
-        model = GrokkingTransformer(p=p, d_model=d_model,
-                                    num_heads=num_heads, d_mlp=d_mlp)
+        config = Config(p=p, d_model=d_model, num_heads=num_heads, d_mlp=d_mlp, num_epochs=epochs, fn_name=op)
+        model = Transformer(config)
         log_path = log_dir / f"op_{op}.csv" if log_dir else None
         history = train(
             model, train_data, test_data,
@@ -409,9 +416,8 @@ def sweep_depth(
         print(f"Depth sweep: num_layers = {depth}")
         print(f"{'='*60}")
         torch.manual_seed(seed)
-        model = GrokkingTransformer(p=p, d_model=d_model,
-                                    num_heads=num_heads, d_mlp=d_mlp,
-                                    num_layers=depth)
+        config = Config(p=p, d_model=d_model, num_heads=num_heads, d_mlp=d_mlp, num_epochs=epochs, num_layers=depth)
+        model = Transformer(config)
         log_path = log_dir / f"depth_{depth}.csv" if log_dir else None
         history = train(
             model, train_data, test_data,
