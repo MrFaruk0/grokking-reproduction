@@ -57,7 +57,7 @@ def train(
     model: GrokkingTransformer,
     train_data: torch.Tensor,
     test_data: torch.Tensor,
-    epochs: int = 20_000,
+    epochs: int = 40_000,
     lr: float = 1e-3,
     weight_decay: float = 1.0,
     beta1: float = 0.9,
