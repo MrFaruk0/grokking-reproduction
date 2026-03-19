@@ -1,21 +1,3 @@
-"""
-src/model.py
-1-layer Transformer for grokking on modular arithmetic.
-
-Implements the exact architecture from Nanda et al. (2023):
-    - 1 layer, 4 attention heads
-    - d_model=128, d_mlp=512
-    - Pre-LayerNorm
-    - ReLU activation in MLP
-    - Learned positional embeddings
-    - Loss only on position 2 (the "=" token position → predicts result)
-
-FILE: src/model.py
-CHANGES: initial implementation
-DEPENDS ON: —
-DEPENDED ON BY: src/train.py, src/analysis.py, notebooks/run_all.ipynb
-"""
-
 import math
 import torch
 import torch.nn as nn
@@ -123,14 +105,12 @@ class TransformerBlock(nn.Module):
 
     def __init__(self, d_model: int, num_heads: int, d_mlp: int) -> None:
         super().__init__()
-        self.ln1 = nn.LayerNorm(d_model)
         self.attn = MultiHeadAttention(d_model, num_heads)
-        self.ln2 = nn.LayerNorm(d_model)
         self.mlp  = MLP(d_model, d_mlp)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x + self.attn(self.ln1(x))
-        x = x + self.mlp(self.ln2(x))
+    def forward(self, x):
+        x = x + self.attn(x)
+        x = x + self.mlp(x)
         return x
 
 
@@ -146,7 +126,7 @@ class GrokkingTransformer(nn.Module):
         - Token embedding W_E: (vocab_size, d_model)
         - Positional embedding W_pos: (seq_len=3, d_model)
         - TransformerBlock × num_layers
-        - Final LayerNorm
+        - No LayerNorm
         - Unembedding W_U: (d_model, p) — only p output logits (not vocab_size)
 
     Prediction:
@@ -185,8 +165,6 @@ class GrokkingTransformer(nn.Module):
             for _ in range(num_layers)
         ])
 
-        # Final layer norm
-        self.ln_final = nn.LayerNorm(d_model)
 
         # Unembedding — output logits over p result tokens only (not the "=" token)
         self.unembed = nn.Linear(d_model, p, bias=False)
@@ -217,9 +195,7 @@ class GrokkingTransformer(nn.Module):
         x = self.embedding(tokens) + self.pos_embedding(positions)  # (B, T, d_model)
 
         for block in self.blocks:
-            x = block(x)
-
-        x = self.ln_final(x)           # (B, T, d_model)
+            x = block(x)         # (B, T, d_model)
         x = x[:, -1, :]               # (B, d_model) — last position ("=" token)
         logits = self.unembed(x)      # (B, p)
         return logits

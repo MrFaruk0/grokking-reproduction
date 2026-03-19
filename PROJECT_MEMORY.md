@@ -17,7 +17,11 @@ Next step: Project complete (abstract drafted)
 - Last commit: —
 
 ## Deviations from paper
-— none yet
+- LayerNorm: DÜZELTILDI. İlk implementasyonda pre-LN kullanılmıştı (3 adet: ln1, ln2, ln_final).
+  Makale açıkça "We did not use LayerNorm" diyor (Bölüm 3, sayfa 3).
+  src/model.py güncellenerek tüm LayerNorm katmanları kaldırıldı.
+  Diğer tüm hyperparametreler makalenin Bölüm 3 ve Appendix A spesifikasyonuyla birebir eşleşiyor.
+
 
 ## Completed steps
 - [2026-03-18] Scaffolded project: .gitignore, requirements.txt, PROJECT_EXPLAIN.md, PROJECT_MEMORY.md, src/data.py, src/model.py, src/train.py, src/analysis.py, src/figures.py, src/utils.py, notebooks/run_all.ipynb
@@ -25,6 +29,7 @@ Next step: Project complete (abstract drafted)
   - **Root Cause:** Downgrading `numpy` to `1.26.4` in Colab's Python 3.12 environment caused binary incompatibility with pre-installed extensions compiled for Numpy 2.x.
   - **Fix:** Updated `requirements.txt` to pin newer versions (Numpy 2.1.1, PyTorch 2.4.0, SciPy 1.14.0, etc.) that match Colab's modern runtime.
 - [2026-03-18] Successfully ran all training sweeps and generated figures.
+- [2026-03-20] src/model.py LayerNorm kaldırma güncellemesi | outcome: ln_count=0, forward pass shape (B,113) doğrulandı
 
 ## Hyperparameters
 - p: 113
