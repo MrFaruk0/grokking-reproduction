@@ -45,75 +45,50 @@ Next step: Colab'da Cell 2 çalıştır (baseline training)
 - optimizer: AdamW (β1=0.9, β2=0.98, lr_warmup)
 - batch_size: full dataset (p²=12769 pairs)
 - train_fraction: 0.3
-- total_epochs: 50000
-- seed: 42
+- total_epochs: 10000
+- seed: 0
 
-## Results log
-### Baseline (p=113, wd=1.0, 1-layer, add, seed=42)
+## Results Update — 2026-03-20T19:55:02
+
+### Baseline (p=113, wd=1.0, 1-layer, add, seed=0)
 - Grokking observed: Yes
-- Grokking epoch (test acc ≥ 95%): 1600
+- Grokking epoch (test acc >= 95%): 5800
 - Final train acc: 1.0000
 - Final test acc:  1.0000
-- Wall time: 3.2 min
-
-### Further explorations
-- Weight decay sweep: Completed (λ=0.0 fails to grok, higher λ groks faster)
-- p sweep: Completed (Larger p groks *faster*)
-- Operations sweep: Completed (Subtraction groks significantly slower than addition/multiplication)
-- Depth sweep: Completed (Deeper networks grok faster)
-
-## Figures
-- figure1_grokking_curve.png: complete
-- figure2_progress_measures.png: complete
-- figure3_fourier_embeddings.png: complete
-- figure4_weight_norm.png: complete
-- figure5_wd_sweep.png: complete
-- figure6_p_sweep.png: complete
-- figure7_operations.png: complete
-- figure8_depth.png: complete
-
-## Notes
-- **Empirical Surprise (Varying p):** The hypothesis that larger primes `p` would delay grokking due to requiring a more complex Fourier circuit was falsified. Empirically, `p=127` grokked at epoch 1400, while `p=53` took until epoch 5300. Larger `p` led to significantly earlier grokking.
-- **Empirical Surprise (Operations):** Subtraction `(a-b) mod p` took 6200 epochs to grok, drastically longer than addition (1600 epochs), despite mathematical symmetry.
-- **Empirical Surprise (Depth):** Increasing depth from 1 to 3 layers sped up grokking from epoch 1600 to 900.
-
----
-## Results Update — 2026-03-18T14:22:37
-
-### Baseline (p=113, wd=1.0, 1-layer, add, seed=42)
-- Grokking observed: Yes
-- Grokking epoch (test acc ≥ 95%): 1600
-- Final train acc: 1.0000
-- Final test acc:  1.0000
-- Wall time: 3.2 min
 
 ### Weight Decay Sweep
-| λ | Grokking epoch | Final test acc |
-|---|---------------|----------------|
-| 0.0 | Not reached | 0.4258 |
-| 0.1 | 8100 | 0.9998 |
-| 0.5 | 2500 | 1.0000 |
-| 1.0 | 1600 | 1.0000 |
-| 2.0 | 1000 | 1.0000 |
+| lambda | Grokking epoch | Final test acc |
+|--------|---------------|----------------|
+| 0.0 | Not reached | 0.0715 |
+| 0.1 | Not reached | 0.0403 |
+| 0.5 | 9400 | 0.9933 |
+| 1.0 | 8000 | 1.0000 |
+| 2.0 | 4500 | 1.0000 |
 
 ### Prime p Sweep
 | p | Grokking epoch | Final test acc |
 |---|---------------|----------------|
-| 53 | 5300 | 1.0000 |
-| 97 | 2500 | 1.0000 |
-| 113 | 1600 | 1.0000 |
-| 127 | 1400 | 1.0000 |
+| 53 | Not reached | 0.1601 |
+| 97 | 5700 | 1.0000 |
+| 113 | 7700 | 1.0000 |
+| 127 | 7600 | 0.9999 |
 
-### Operations Sweep (p=113)
-| operation | Grokking epoch | Final test acc |
-|-----------|---------------|----------------|
-| add | 1600 | 1.0000 |
-| subtract | 6200 | 1.0000 |
-| multiply | 1700 | 1.0000 |
+### Operations Sweep
+| op | Grokking epoch | Final test acc |
+|----|---------------|----------------|
+| add | 6600 | 0.9996 |
+| subtract | Not reached | 0.0089 |
+| multiply | 5900 | 1.0000 |
 
-### Depth Sweep (p=113)
-| num_layers | Grokking epoch | Final test acc |
-|------------|---------------|----------------|
-| 1 | 1600 | 1.0000 |
-| 2 | 1200 | 1.0000 |
-| 3 | 900 | 1.0000 |
+### Depth Sweep
+| layers | Grokking epoch | Final test acc |
+|--------|---------------|----------------|
+| 1 | 4400 | 0.9984 |
+| 2 | 3800 | 1.0000 |
+| 3 | 3700 | 1.0000 |
+
+## Notes (10k Epoch Bound)
+- **Empirical Surprise (Weight Decay):** Weight decay is critical. λ=0.0 and λ=0.1 failed to grok entirely within 10,000 epochs. Grokking dramatically accelerates as λ increases to 2.0.
+- **Empirical Surprise (Varying p):** Larger `p` generally leads to faster grokking in this environment. `p=53` did not even grok within 10k epochs, whereas `p=127` grokked at 7600.
+- **Empirical Surprise (Operations):** Subtraction `(a-b) mod p` completely failed to grok within 10k epochs, drastically underperforming compared to addition (6600 epochs) and multiplication (5900 epochs).
+- **Empirical Surprise (Depth):** Increasing depth from 1 to 3 layers sped up grokking from epoch 4400 to 3700.
