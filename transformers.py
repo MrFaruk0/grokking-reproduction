@@ -475,6 +475,8 @@ class Trainer:
         print('testing length = ', len(self.test))
         self.train_losses = []
         self.test_losses = []
+        self.train_accs = []
+        self.test_accs = []
         self.config = config
 
     def save_epoch(self, epoch, save_to_wandb=False):
@@ -496,8 +498,19 @@ class Trainer:
         self.train_losses.append(train_loss.item())
         self.test_losses.append(test_loss.item())
         if epoch % 100 == 0:
-            # TODO is this ok? this was np.log, and it was barking at me ; i think np.log was being interpreted as a logging module
-            print(f'Epoch {epoch}, train loss {t.log(train_loss).item():.4f}, test loss {t.log(test_loss).item():.4f}')
+            with t.no_grad():
+                train_logits = self.model(self.train)[:, -1, :-1]
+                train_labels = t.tensor([self.config.fn(i, j) for i, j, _ in self.train]).to(self.config.device)
+                train_acc = (train_logits.argmax(-1) == train_labels).float().mean().item()
+                
+                test_logits = self.model(self.test)[:, -1, :-1]
+                test_labels = t.tensor([self.config.fn(i, j) for i, j, _ in self.test]).to(self.config.device)
+                test_acc = (test_logits.argmax(-1) == test_labels).float().mean().item()
+                
+                self.train_accs.append(train_acc)
+                self.test_accs.append(test_acc)
+                
+            print(f'Epoch {epoch:5d} | train loss: {train_loss.item():.4f} | test loss: {test_loss.item():.4f} | train acc: {train_acc:.4f} | test acc: {test_acc:.4f}')
         train_loss.backward()
         self.optimizer.step()
         self.scheduler.step()
@@ -523,6 +536,8 @@ class Trainer:
             'test_loss': self.test_losses[-1],
             'train_losses': self.train_losses,
             'test_losses': self.test_losses,
+            'train_accs': self.train_accs,
+            'test_accs': self.test_accs,
             'epoch': self.config.num_epochs,
         }
         if save_optimizer_and_scheduler:
