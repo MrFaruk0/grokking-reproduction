@@ -37,5 +37,3 @@ wandb/
 
 .cursorrules
 PROJECT_MEMORY.md
-/outputs
-.env
