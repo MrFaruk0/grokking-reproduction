@@ -34,3 +34,8 @@ Thumbs.db
 
 # Weights & Biases (if used)
 wandb/
+
+.cursorrules
+PROJECT_MEMORY.md
+/outputs
+.env
